@@ -1,4 +1,5 @@
 import asyncpg
+import logging
 
 class Database:
     def __init__(self, pool):
@@ -6,6 +7,7 @@ class Database:
 
     async def create_tables(self):
         async with self.pool.acquire() as conn:
+            logging.info("🛠 Проверка и создание таблиц...")
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
@@ -17,8 +19,9 @@ class Database:
                 CREATE TABLE IF NOT EXISTS mifl_cards (
                     card_id SERIAL PRIMARY KEY,
                     name TEXT,
-                    rarity TEXT, -- Stock, Series, Drop, Chase, One
-                    rating REAL, -- По твоей шкале 0.5 - 5.0
+                    position TEXT,
+                    rarity TEXT,
+                    rating REAL,
                     club TEXT,
                     photo_id TEXT
                 );
@@ -29,3 +32,4 @@ class Database:
                     card_id INTEGER REFERENCES mifl_cards(card_id) ON DELETE CASCADE
                 );
             """)
+            logging.info("✅ База данных готова.")
