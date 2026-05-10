@@ -1,45 +1,47 @@
 from aiogram import Router, F, types
-from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command
 import logging
 
 profile_router = Router()
 
-@profile_router.message(F.text == "👤 Профиль")
-async def view_profile(message: types.Message, state: FSMContext, db):
-    await state.clear()
+@profile_router.message(Command("start"))
+async def cmd_start(message: types.Message, db):
+    user_id = message.from_user.id
     
-    u = await db.pool.fetchrow("SELECT * FROM users WHERE user_id = $1", message.from_user.id)
-    if not u: return
-    
-    cards_count = await db.pool.fetchval("SELECT COUNT(*) FROM inventory WHERE user_id = $1", message.from_user.id)
-    
-    # Расчет статистики ставок (MIFL STAKE)
-    stats = await db.pool.fetchrow("""
-        SELECT 
-            COUNT(*) FILTER (WHERE status = 'won') as wins,
-            COUNT(*) FILTER (WHERE status = 'lost') as losses,
-            COUNT(*) FILTER (WHERE status = 'active') as active,
-            SUM(amount) FILTER (WHERE status = 'won') as total_earned
-        FROM bets 
-        WHERE user_id = $1
-    """, message.from_user.id)
-
-    wins = stats['wins'] or 0
-    losses = stats['losses'] or 0
-    active = stats['active'] or 0
-    total_settled = wins + losses
-    
-    # Автоматический расчет винрейта
-    winrate = round((wins / total_settled) * 100, 1) if total_settled > 0 else 0.0
-
-    caption = (
-        f"👤 <b>Профиль: {u['username']}</b>\n"
-        f"💰 Баланс: {u['stars']:,} 🌟\n"
-        f"🎴 Карт: {cards_count}\n\n"
-        f"📊 <b>Статистика MIFL STAKE:</b>\n"
-        f"✅ Побед: {wins} | ❌ Поражений: {losses}\n"
-        f"⏳ Активных ставок: {active}\n"
-        f"📈 Винрейт: <b>{winrate}%</b>"
+    # Пытаемся добавить юзера, если его еще нет (ON CONFLICT DO NOTHING)
+    await db.pool.execute(
+        "INSERT INTO users (user_id, stars) VALUES ($1, 1000) ON CONFLICT (user_id) DO NOTHING",
+        user_id
     )
     
-    await message.answer(caption, parse_mode="HTML")
+    # Главное меню с кнопками
+    kb = [
+        [types.KeyboardButton(text="👤 Профиль"), types.KeyboardButton(text="⚽ Матчи")],
+        [types.KeyboardButton(text="🎴 Открыть пак"), types.KeyboardButton(text="🎒 Инвентарь")],
+        [types.KeyboardButton(text="📋 Мои Ставки"), types.KeyboardButton(text="🎁 Бонус")]
+    ]
+    keyboard = types.ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+    
+    await message.answer(
+        f"👋 Привет, {message.from_user.first_name}!\n\n"
+        "Добро пожаловать в <b>MIFL STAKE</b> — симулятор ставок на медиафутбол.\n"
+        "Тебе начислено 1000 🌟 для старта!",
+        reply_markup=keyboard
+    )
+
+@profile_router.message(F.text == "👤 Профиль")
+async def show_profile(message: types.Message, db):
+    user = await db.pool.fetchrow("SELECT * FROM users WHERE user_id = $1", message.from_user.id)
+    
+    if not user:
+        return await message.answer("Сначала напиши /start")
+
+    # Считаем количество карт
+    cards_count = await db.pool.fetchval("SELECT COUNT(*) FROM inventory WHERE user_id = $1", message.from_user.id)
+
+    res = (
+        f"👤 <b>Профиль: {message.from_user.first_name}</b>\n\n"
+        f"💰 Баланс: {user['stars']} 🌟\n"
+        f"🎴 Карточек в коллекции: {cards_count}\n"
+    )
+    await message.answer(res)
