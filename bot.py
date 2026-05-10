@@ -25,6 +25,7 @@ async def main():
     # 1. Берем данные из настроек Render (Environment Variables)
     TOKEN = os.getenv("BOT_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
+    ADMIN_IDS = os.getenv("ADMIN_IDS")
 
     if not TOKEN:
         logger.error("❌ ОШИБКА: Переменная BOT_TOKEN не найдена в настройках Render!")
